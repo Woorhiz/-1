@@ -1,0 +1,61 @@
+#Пастушкова Анастасия Леонидовна—
+#для региона 26 рассчитайте урожайность пшеницы в 2015 году
+#взяв для рассчета средние суммы активных температур за предыдущие 11 лет,
+#с 30 ближайших метеостанций но убирая из рассчета
+#активных температур дни с температурой выше 25 градусов
+#Подключим нужные библиотеки
+library(lubridate)
+library(stringr)
+library(ggplot2)
+library(tidyverse)
+library(rnoaa)
+station_data = ghcnd_stations()
+station_data = read.csv("station_data.csv")
+#После получения всписка всех станций, получите список станций ближайших к столице вашего региона,создав таблицу с именем региона и координатами его столицы
+stavropol = data.frame(id = "STAVRAPOL", latitude = 45.04548, longitude = 41.96834)
+stavropol_around = meteo_nearby_stations(lat_lon_df = stavropol, station_data = station_data,
+limit = 30, var = c("PRCP", "TAVG"),
+year_min = 2015, year_max = 2015)
+#stavropol_around это список единственным элементом которого является таблица, содержащая идентификаторы метеостанций отсортированных по их
+# удалленности от Ставраполя, очевидно что первым элементом таблицы будет идентификатор метеостанции Читы, его то мы и попытаемся получить
+stavropol_id = stavropol_around[["STAVRAPOL"]][["id"]][1]
+str(stavropol_around)
+#Для получения всех данных с метеостанции, зная ее идентификатор, используйте след. команду
+all_stavropol_data = meteo_tidy_ghcnd(stationid = stavropol_id)
+stavropol_table=stavropol_around[[1]]
+summary(stavropol_table)
+all_i=data.frame()
+all_stavropol=data.frame()
+for(i in 1:30)
+{all_i = meteo_tidy_ghcnd(stationid=stavropol_around[["STAVRAPOL"]][["id"]][i])
+all_i=all_i[ ,c("id","date", "tavg")]
+print(all_i)
+all_stavropol=rbind(all_stavropol, all_i)}
+#Средняя сумма активных температур
+data_stavropol=all_stavropol %>%
+mutate(date=ymd(date),
+year=year(date),
+month=month(date)) %>%
+mutate(tavg=case_when(tavg<50 ~ 0,tavg>250 ~ 0, TRUE ~ tavg/10)) %>%
+filter (year>2004 & year<2015) %>%
+group_by(id,year,month) %>%
+summarize(tsum=sum(tavg, na.rm=T)) %>%
+group_by(month) %>% summarize(St = mean(tsum, na.rm=T))
+afi=c(0.00,0.00,0.00,32.11,26.31,25.64,32.20,18.73,
+16.30,13.83,0.00,0.00)
+bfi=c(0.00,0.00,0.00,11.30,9.26,9.03,8.16,6.59,5.73,
+4.87,0.00,0.00)
+di=c(0.00,0.00,0.00,0.33,1.00,1.00,1.00,0.32,0.00,
+0.00,0.00,0.00)
+y=1.0
+Kf=300
+Qj=1600
+Lj=2.2
+Ej=25
+#Рассчитаем урожайность по месяцам
+data_stavropol= data_stavropol %>%
+mutate(Fi=(afi)+(bfi)*y*(data_stavropol$St))
+data_stavropol= data_stavropol %>% mutate(Yj=(((data_stavropol$Fi)*(di)*Kf)/(Qj*Lj*(100-Ej))))
+#Расчитываем суммарную урожайность как сумму по месяцам
+YIELD=sum(data_stavropol$Yj);YIELD
+# Ответ: 17,6 ц/га
